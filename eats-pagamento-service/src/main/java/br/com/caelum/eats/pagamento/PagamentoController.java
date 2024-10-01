@@ -1,6 +1,7 @@
 package br.com.caelum.eats.pagamento;
 
 import java.net.URI;
+import java.time.LocalDateTime;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -13,6 +14,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import org.springframework.messaging.Message;
+import org.springframework.messaging.support.MessageBuilder;
+
 import lombok.AllArgsConstructor;
 
 @RestController
@@ -20,7 +24,8 @@ import lombok.AllArgsConstructor;
 @AllArgsConstructor
 class PagamentoController {
 
-	private PagamentoRepository pagamentoRepo;
+	private final PagamentoRepository pagamentoRepo;
+	private final StreamConfig.PagamentoConfirmadoSource pagamentoConfirmadoSource;
 
 	@GetMapping("/{id}")
 	PagamentoDto detalha(@PathVariable("id") Long id) {
@@ -41,6 +46,15 @@ class PagamentoController {
 		Pagamento pagamento = pagamentoRepo.findById(id).orElseThrow(() -> new ResourceNotFoundException());
 		pagamento.setStatus(Pagamento.Status.CONFIRMADO);
 		pagamentoRepo.save(pagamento);
+
+Long pagamentoId = pagamento.getId();
+		Long pedidoId = pagamento.getPedidoId();
+		PagamentoConfirmadoEvent pagamentoConfirmadoEvent =
+				new PagamentoConfirmadoEvent(pagamentoId, pedidoId);
+		Message<PagamentoConfirmadoEvent> message = 
+				MessageBuilder.withPayload(pagamentoConfirmadoEvent).build();
+		pagamentoConfirmadoSource.pagamentosConfirmados().send(message);
+
 		return new PagamentoDto(pagamento);
 	}
 
